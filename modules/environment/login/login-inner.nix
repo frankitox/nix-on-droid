@@ -25,6 +25,17 @@ writeText "login-inner" ''
     fi
   ''}
 
+  ${lib.optionalString config.supervisord.enable ''
+    set +e
+    if [ ! -e "${config.supervisord.socketPath}" ]; then
+      ${config.supervisord.package}/bin/supervisord -c /etc/supervisord.conf
+      if [ $? != 0 ]; then
+        echo "Warning: supervisord failed to start"
+      fi
+    fi
+    set -e
+  ''}
+
   ${lib.optionalString config.build.initialBuild ''
     if [ -e /etc/UNINTIALISED ]; then
       export HOME="${config.user.home}"
