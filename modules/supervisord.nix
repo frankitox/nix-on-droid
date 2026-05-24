@@ -174,7 +174,7 @@ in {
         description = ''
           Definition of supervisord programs.
 
-          Upstream documentations are available at <http://supervisord.org/configuration.html#program-x-section-settings>.
+          Upstream documentation: http://supervisord.org/configuration.html#program-x-section-settings
         '';
         type = types.attrsOf programType;
         default = {};
