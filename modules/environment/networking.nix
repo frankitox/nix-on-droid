@@ -21,6 +21,18 @@ in
 
   options.networking = {
 
+    hostName = lib.mkOption {
+      type = types.str;
+      default = "";
+      example = "my-phone";
+      description = lib.mdDoc ''
+        Hostname reported by `uname(2)` inside the proot environment.
+        When set, passes `--hostname` to proot-static so that
+        `gethostname(3)` returns this value for all processes.
+        Has no effect when empty (the default, which keeps "localhost").
+      '';
+    };
+
     hosts = lib.mkOption {
       type = types.attrsOf (types.listOf types.str);
       default = { };
@@ -59,49 +71,54 @@ in
 
   ###### implementation
 
-  config = {
+  config = lib.mkMerge [
+    (lib.mkIf (cfg.hostName != "") {
+      build.extraProotOptions = [ "--hostname=${cfg.hostName}" ];
+    })
+    {
 
-    assertions = [{
-      assertion = !localhostMultiple;
-      message = ''
-        `networking.hosts` maps "localhost" to something other than "127.0.0.1"
-        or "::1". This will break some applications. Please use
-        `networking.extraHosts` if you really want to add such a mapping.
-      '';
-    }];
-
-    networking.hostFiles =
-      let
-        localhostHosts = pkgs.writeText "localhost-hosts" ''
-          127.0.0.1 localhost
-          ::1 localhost
+      assertions = [{
+        assertion = !localhostMultiple;
+        message = ''
+          `networking.hosts` maps "localhost" to something other than "127.0.0.1"
+          or "::1". This will break some applications. Please use
+          `networking.extraHosts` if you really want to add such a mapping.
         '';
-        stringHosts =
-          let
-            oneToString = set: ip: ip + " " + concatStringsSep " " set.${ip} + "\n";
-            allToString = set: concatMapStrings (oneToString set) (attrNames set);
-          in
-          pkgs.writeText "string-hosts" (allToString (filterAttrs (_: v: v != [ ]) cfg.hosts));
-        extraHosts = pkgs.writeText "extra-hosts" cfg.extraHosts;
-      in
-      mkBefore [ localhostHosts stringHosts extraHosts ];
+      }];
 
-    environment.etc = {
-      # /etc/services: TCP/UDP port assignments.
-      services.source = pkgs.iana-etc + "/etc/services";
+      networking.hostFiles =
+        let
+          localhostHosts = pkgs.writeText "localhost-hosts" ''
+            127.0.0.1 localhost
+            ::1 localhost
+          '';
+          stringHosts =
+            let
+              oneToString = set: ip: ip + " " + concatStringsSep " " set.${ip} + "\n";
+              allToString = set: concatMapStrings (oneToString set) (attrNames set);
+            in
+            pkgs.writeText "string-hosts" (allToString (filterAttrs (_: v: v != [ ]) cfg.hosts));
+          extraHosts = pkgs.writeText "extra-hosts" cfg.extraHosts;
+        in
+        mkBefore [ localhostHosts stringHosts extraHosts ];
 
-      # /etc/protocols: IP protocol numbers.
-      protocols.source = pkgs.iana-etc + "/etc/protocols";
+      environment.etc = {
+        # /etc/services: TCP/UDP port assignments.
+        services.source = pkgs.iana-etc + "/etc/services";
 
-      # /etc/hosts: Hostname-to-IP mappings.
-      hosts.source = pkgs.concatText "hosts" cfg.hostFiles;
+        # /etc/protocols: IP protocol numbers.
+        protocols.source = pkgs.iana-etc + "/etc/protocols";
 
-      "resolv.conf".text = ''
-        nameserver 1.1.1.1
-        nameserver 8.8.8.8
-      '';
-    };
+        # /etc/hosts: Hostname-to-IP mappings.
+        hosts.source = pkgs.concatText "hosts" cfg.hostFiles;
 
-  };
+        "resolv.conf".text = ''
+          nameserver 1.1.1.1
+          nameserver 8.8.8.8
+        '';
+      };
+
+    }
+  ];
 
 }

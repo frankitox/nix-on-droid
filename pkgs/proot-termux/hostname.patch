@@ -1,0 +1,127 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Franco Biasin <franconbiasin@gmail.com>
+Date: Mon, 26 May 2026 00:00:00 +0000
+Subject: [PATCH] Add --hostname option to override uname nodename inside proot
+
+---
+ src/cli/proot.c               | 14 +++++++++++++
+ src/cli/proot.h               | 10 +++++++++
+ src/extension/kompat/kompat.c | 32 ++++++++++++++++++++++++++++++
+ src/extension/kompat/kompat.h |  9 +++++++++
+ 4 files changed, 65 insertions(+)
+ create mode 100644 src/extension/kompat/kompat.h
+
+diff --git a/src/extension/kompat/kompat.h b/src/extension/kompat/kompat.h
+new file mode 100644
+--- /dev/null
++++ b/src/extension/kompat/kompat.h
+@@ -0,0 +1,9 @@
++#ifndef KOMPAT_H
++#define KOMPAT_H
++
++#include "extension/extension.h"
++#include "tracee/tracee.h"
++
++int set_kompat_hostname(Tracee *tracee, const char *hostname);
++
++#endif /* KOMPAT_H */
+diff --git a/src/extension/kompat/kompat.c b/src/extension/kompat/kompat.c
+--- a/src/extension/kompat/kompat.c
++++ b/src/extension/kompat/kompat.c
+@@ -387,4 +387,36 @@ int kompat_callback(Extension *extension, ExtensionEvent event,
+ 	default:
+ 		return 0;
+ 	}
+ }
++
++/**
++ * Set the hostname reported by uname(2) inside @tracee's proot environment
++ * to @hostname.  Activates the kompat uname interception if not already done,
++ * using the real kernel release so no compatibility syscall translations fire.
++ */
++int set_kompat_hostname(Tracee *tracee, const char *hostname)
++{
++	Extension *extension;
++	Config *config;
++	struct utsname utsname;
++	int status;
++
++	extension = get_extension(tracee, kompat_callback);
++	if (extension == NULL) {
++		if (uname(&utsname) < 0)
++			return -1;
++		status = initialize_extension(tracee, kompat_callback,
++					      utsname.release);
++		if (status < 0)
++			return -1;
++		extension = get_extension(tracee, kompat_callback);
++		if (extension == NULL)
++			return -1;
++	}
++
++	config = talloc_get_type_abort(extension->config, Config);
++	strncpy(config->utsname.nodename, hostname,
++		sizeof(config->utsname.nodename) - 1);
++	config->utsname.nodename[sizeof(config->utsname.nodename) - 1] = '\0';
++	return 0;
++}
+diff --git a/src/cli/proot.c b/src/cli/proot.c
+--- a/src/cli/proot.c
++++ b/src/cli/proot.c
+@@ -27,6 +27,7 @@
+ #include "cli/cli.h"
+ #include "cli/note.h"
+ #include "extension/extension.h"
++#include "extension/kompat/kompat.h"
+ #include "extension/sysvipc/sysvipc.h"
+ #include "path/binding.h"
+ #include "attribute.h"
+@@ -172,6 +173,18 @@ static int handle_option_k(Tracee *tracee, const Cli *cli UNUSED, const char *v
+ 	return 0;
+ }
+
++static int handle_option_hostname(Tracee *tracee, const Cli *cli UNUSED,
++				  const char *value)
++{
++	int status;
++
++	status = set_kompat_hostname(tracee, value);
++	if (status < 0)
++		note(tracee, WARNING, INTERNAL,
++		     "option \"--hostname %s\" discarded", value);
++	return 0;
++}
++
+ static int handle_option_i(Tracee *tracee, const Cli *cli UNUSED, const char *value)
+ {
+ 	void *extension;
+diff --git a/src/cli/proot.h b/src/cli/proot.h
+--- a/src/cli/proot.h
++++ b/src/cli/proot.h
+@@ -55,6 +55,7 @@ static int handle_option_q(Tracee *tracee, const Cli *cli, const char *value);
+ static int handle_option_v(Tracee *tracee, const Cli *cli, const char *value);
+ static int handle_option_V(Tracee *tracee, const Cli *cli, const char *value);
+ static int handle_option_h(Tracee *tracee, const Cli *cli, const char *value);
++static int handle_option_hostname(Tracee *tracee, const Cli *cli, const char *value);
+ static int handle_option_k(Tracee *tracee, const Cli *cli, const char *value);
+ static int handle_option_0(Tracee *tracee, const Cli *cli, const char *value);
+ static int handle_option_i(Tracee *tracee, const Cli *cli, const char *value);
+@@ -201,9 +202,18 @@ static Cli proot_cli = {
+ 	  .detail = "\tIf a program is run on a kernel older than the one expected by its\n\
+ \tGNU C library, the following error is reported: \"FATAL: kernel too\n\
+ \told\".  To be able to run such programs, PRoot can emulate some of\n\
+ \tthe features that are available in the kernel release specified by\n\
+ \t*string* but that are missing in the current kernel.",
+ 	},
++	{ .class = "Extension options",
++	  .arguments = {
++		{ .name = "--hostname", .separator = '=', .value = "name" },
++		{ .name = NULL, .separator = '\0', .value = NULL } },
++	  .handler = handle_option_hostname,
++	  .description = "Set the hostname reported by uname(2) inside proot to *name*.",
++	  .detail = "\tOverrides the nodename field returned by uname(2) for all tracees,\n\
++\twhich is what gethostname(3) reads.  Does not require root privileges.",
++	},
+ 	{ .class = "Extension options",
+ 	  .arguments = {
+ 		{ .name = "-0", .separator = '\0', .value = NULL },
