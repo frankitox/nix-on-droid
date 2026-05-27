@@ -8,14 +8,13 @@ let
   runtimePackages = with pkgs; [
     coreutils
     git
+    gh
     gnugrep
     gnused
     gnutar
     gzip
     jq
     nix
-    openssh
-    rsync
   ];
 in
 
