@@ -59,6 +59,7 @@ pkgsCross.stdenv.mkDerivation rec {
     Checking for HAVE_MREMAP: OK
     Checking for HAVE_INCOHERENT_MMAP: OK
     Checking getconf large file support flags work: OK
+    Checking for pthread_atfork: FAIL
     EOF
   '';
 
