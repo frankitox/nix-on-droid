@@ -1,9 +1,7 @@
 name: Build bootstrap packages and push to cachix
 on:
-  pull_request:
   push:
-  schedule:
-    - cron: 0 0 * * 1
+  workflow_dispatch:
 jobs:
   cachix:
     runs-on: ubuntu-latest
@@ -14,12 +12,16 @@ jobs:
 
       - name: Install nix
         uses: cachix/install-nix-action@v25
+        with:
+          extra_nix_config: |
+            substituters = https://cache.nixos.org https://nix-on-droid.cachix.org https://frankitox.cachix.org
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-on-droid.cachix.org-1:56snoMJTXmDRC1Ei24CmKoUqvHJ9XCp+nidK7qkMQrU= frankitox.cachix.org-1:pFYDvySHaeLNXWss1XwNsTAIc+dhzKX6WUO1UBSZUBM=
 
       - name: Setup cachix
         uses: cachix/cachix-action@v14
         with:
-          name: nix-on-droid
-          signingKey: "${{ secrets.CACHIX_SIGNING_KEY }}"
+          name: frankitox
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
       - name: Build bootstrap zip
         run: |
