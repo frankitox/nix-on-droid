@@ -1,11 +1,6 @@
 {
   description = "Nix-enabled environment for your Android device";
 
-  nixConfig = {
-    extra-substituters = [ "https://frankitox.cachix.org" ];
-    extra-trusted-public-keys = [ "frankitox.cachix.org-1:pFYDvySHaeLNXWss1XwNsTAIc+dhzKX6WUO1UBSZUBM=" ];
-  };
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs";
 
