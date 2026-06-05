@@ -100,6 +100,78 @@ let
     } // program.extraConfig;
   in lib.mapAttrs (_: v: renderAtom v) section;
 
+  eventlistenerType = types.submodule ({ name, config, ... }: {
+    options = {
+      enable = lib.mkOption {
+        description = "Whether to enable this event listener.";
+        type = types.bool;
+        default = true;
+      };
+      command = lib.mkOption {
+        description = "The command that will be run as the event listener process.";
+        type = types.str;
+      };
+      script = lib.mkOption {
+        description = "Shell commands executed as the event listener process.";
+        type = types.lines;
+        default = "";
+      };
+      events = lib.mkOption {
+        description = ''
+          Comma-separated list of event type names to subscribe to.
+          E.g. "PROCESS_STATE_FATAL" or "PROCESS_STATE".
+        '';
+        type = types.str;
+      };
+      path = lib.mkOption {
+        description = "Packages added to the listener's PATH environment variable.";
+        type = types.listOf (types.either types.package types.str);
+        default = [];
+      };
+      autostart = lib.mkOption {
+        description = "Whether to automatically start the listener.";
+        type = types.bool;
+        default = true;
+      };
+      autorestart = lib.mkOption {
+        description = "Whether to automatically restart the listener if it exits.";
+        type = types.either types.bool (types.enum [ "unexpected" ]);
+        default = "unexpected";
+      };
+      environment = lib.mkOption {
+        description = "Environment variables passed to the listener process.";
+        type = types.attrsOf types.str;
+        default = {};
+      };
+      extraConfig = lib.mkOption {
+        description = "Extra structured configurations for the [eventlistener:x] section.";
+        type = types.attrsOf (types.either types.str types.bool);
+        default = {};
+      };
+    };
+    config = {
+      command = lib.mkIf (config.script != "")
+        (toString (pkgs.writeShellScript "${name}-eventlistener-script.sh" ''
+          set -e
+          ${config.script}
+        ''));
+
+      environment.PATH = lib.mkDefault (lib.makeBinPath config.path);
+    };
+  });
+
+  renderEventlistener = listener: let
+    section = {
+      inherit (listener) command events autostart autorestart;
+      environment = let
+        escape = s: builtins.replaceStrings [ "%" ] [ "%%" ] s;
+        envs = lib.mapAttrsToList (k: v: "${k}=\"${escape v}\"") listener.environment;
+      in builtins.concatStringsSep "," envs;
+    } // listener.extraConfig;
+  in lib.mapAttrs (_: v: renderAtom v) section;
+
+  enabledEventlisteners = lib.filterAttrs (_: l: l.enable) cfg.eventlisteners;
+
   numPrograms = builtins.length (builtins.attrNames enabledPrograms);
   enabledPrograms = lib.filterAttrs (_: program: program.enable) cfg.programs;
 
@@ -120,7 +192,11 @@ let
   } // (lib.mapAttrs' (k: v: {
     name = "program:${k}";
     value = renderProgram v;
-  }) enabledPrograms);
+  }) enabledPrograms)
+    // (lib.mapAttrs' (k: v: {
+    name = "eventlistener:${k}";
+    value = renderEventlistener v;
+  }) enabledEventlisteners);
 
   configFile = format.generate "supervisord.conf" structuredConfig;
 
@@ -177,6 +253,17 @@ in {
           Upstream documentation: http://supervisord.org/configuration.html#program-x-section-settings
         '';
         type = types.attrsOf programType;
+        default = {};
+      };
+      eventlisteners = lib.mkOption {
+        description = ''
+          Definition of supervisord event listeners.
+
+          Event listeners receive supervisor events over stdin and acknowledge
+          them over stdout. Upstream documentation:
+          http://supervisord.org/configuration.html#eventlistener-x-section-settings
+        '';
+        type = types.attrsOf eventlistenerType;
         default = {};
       };
     };
