@@ -113,6 +113,10 @@ in {
       inherit (cfg) autostart;
       path = [ cfg.package pkgs.coreutils ];
       autoRestart = true;
+      extraConfig = {
+        stopasgroup = true;
+        killasgroup = true;
+      };
       script = ''
         # don't write to stdout
         exec >&2
