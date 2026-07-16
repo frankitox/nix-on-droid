@@ -39,6 +39,8 @@ let
       ''}
 
       ${exportAll cfg.sessionVariables}
+
+      ${cfg.extraInit}
     '';
   };
 in
@@ -102,6 +104,17 @@ in
             BAR = "''${config.environment.sessionVariables.FOO} World!";
           };
           </programlisting>
+        '';
+      };
+
+      extraInit = mkOption {
+        default = "";
+        type = types.lines;
+        description = ''
+          Shell script code called during global environment initialisation
+          after all variables in {option}`environment.sessionVariables`
+          have been set. This code is assumed to be shell-independent,
+          which means you should stick to pure sh without sh word split.
         '';
       };
     };
